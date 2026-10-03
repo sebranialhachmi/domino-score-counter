@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
+import { usePrefs } from '../lib/prefs.jsx'
 
-const COLORS = ['#f59e0b', '#10b981', '#38bdf8', '#f43f5e', '#a78bfa', '#facc15', '#ffffff']
+const COLORS = ['#2dd4bf', '#fb923c', '#facc15', '#5eead4', '#fdba74', '#ffffff']
 
-function Confetti({ count = 90 }) {
+function Confetti({ count = 80 }) {
   const pieces = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
@@ -10,7 +11,7 @@ function Confetti({ count = 90 }) {
         left: Math.random() * 100,
         delay: Math.random() * 2.5,
         duration: 2.8 + Math.random() * 2.5,
-        size: 6 + Math.random() * 8,
+        size: 6 + Math.random() * 7,
         drift: `${(Math.random() - 0.5) * 160}px`,
         color: COLORS[i % COLORS.length],
         round: Math.random() > 0.6,
@@ -40,56 +41,68 @@ function Confetti({ count = 90 }) {
   )
 }
 
-export default function WinnerModal({ winner, loser, winnerScore, loserScore, onNewGame, onChangeSettings, onClose }) {
+export default function WinnerModal({
+  winner,
+  loser,
+  winnerScore,
+  loserScore,
+  roundsCount,
+  onNewGame,
+  onChangeSettings,
+  onClose,
+}) {
+  const { t } = usePrefs()
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/75 p-4 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="winner-title"
     >
       <Confetti />
-      <div className="animate-pop-in relative w-full max-w-sm rounded-3xl border border-amber-400/40 bg-gradient-to-b from-amber-500/20 via-slate-900 to-slate-900 p-6 text-center shadow-2xl shadow-amber-500/20">
-        <div className="animate-trophy mb-2 text-7xl">🏆</div>
-        <p className="text-sm font-bold text-amber-300">مبروك الفوز!</p>
-        <h2 id="winner-title" className="mt-1 text-3xl font-black break-words text-white">
+      <div className="glass animate-pop-in relative w-full max-w-sm overflow-hidden rounded-[2rem] p-6 text-center">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-amber-400/25 to-transparent" />
+        <div className="animate-trophy relative mb-1 text-7xl">🏆</div>
+        <p className="relative text-sm font-bold text-amber-300">{t('win.congrats')}</p>
+        <h2 id="winner-title" className="relative mt-1 text-3xl font-black break-words text-white">
           {winner}
         </h2>
 
-        <div className="my-5 flex items-center justify-center gap-4 rounded-2xl bg-slate-950/60 p-4">
-          <div className="min-w-0 flex-1">
+        <div className="relative my-5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl bg-white/5 p-4">
+          <div className="min-w-0">
             <div className="text-4xl font-black text-amber-300 tabular-nums">{winnerScore}</div>
             <div className="truncate text-xs text-slate-400">{winner}</div>
           </div>
           <div className="text-slate-600">—</div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <div className="text-4xl font-black text-slate-400 tabular-nums">{loserScore}</div>
             <div className="truncate text-xs text-slate-500">{loser}</div>
           </div>
+          <div className="col-span-3 mt-1 text-xs text-slate-500">{t('win.inRounds', { n: roundsCount })}</div>
         </div>
 
         <button
           type="button"
           onClick={onNewGame}
           autoFocus
-          className="w-full rounded-2xl bg-amber-400 py-4 text-xl font-black text-slate-950 shadow-lg shadow-amber-400/30 transition active:scale-[0.98]"
+          className="relative w-full rounded-2xl bg-gradient-to-l from-teal-400 to-emerald-400 py-4 text-xl font-black text-slate-950 shadow-lg shadow-teal-500/30 transition active:scale-[0.98]"
         >
-          بدء لعبة جديدة
+          {t('win.newGame')}
         </button>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="relative mt-2 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={onChangeSettings}
-            className="rounded-xl bg-slate-800 py-2.5 text-sm font-bold text-slate-200 hover:bg-slate-700"
+            className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-slate-200 hover:bg-white/10"
           >
-            تغيير الفرق
+            {t('win.changeTeams')}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl bg-slate-800 py-2.5 text-sm font-bold text-slate-200 hover:bg-slate-700"
+            className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-slate-200 hover:bg-white/10"
           >
-            مراجعة الجولات
+            {t('win.review')}
           </button>
         </div>
       </div>
