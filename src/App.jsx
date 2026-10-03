@@ -1,24 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SetupScreen from './components/SetupScreen.jsx'
-import Scoreboard from './components/Scoreboard.jsx'
-import RoundInput from './components/RoundInput.jsx'
-import RoundsTable from './components/RoundsTable.jsx'
+import ScoreCards from './components/ScoreCards.jsx'
+import RoundHistory from './components/RoundHistory.jsx'
+import Keypad from './components/Keypad.jsx'
 import WinnerModal from './components/WinnerModal.jsx'
+import Toast from './components/Toast.jsx'
+import Icon from './components/Icon.jsx'
+import {
+  MAX_ENTRY_DIGITS,
+  computeTotals,
+  computeWinner,
+  entryToNumber,
+  haptic,
+  loadState,
+  newId,
+  saveState,
+} from './lib/game.js'
 
-const STORAGE_KEY = 'domino-scoreboard:v1'
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function newId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
+const EMPTY_ENTRIES = ['', '']
 
 export default function App() {
   const saved = useMemo(loadState, [])
@@ -27,150 +26,247 @@ export default function App() {
   const [dismissedWin, setDismissedWin] = useState(false)
   const [editingSetup, setEditingSetup] = useState(false)
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, rounds }))
-    } catch {
-      // Storage unavailable (private mode) — the game still works in memory.
-    }
-  }, [settings, rounds])
+  // Keypad state: one pending entry per team, and which team the keys type into.
+  const [entries, setEntries] = useState(EMPTY_ENTRIES)
+  const [selected, setSelected] = useState(0)
+  const [editingId, setEditingId] = useState(null)
+  const [shake, setShake] = useState(false)
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
 
-  const totals = useMemo(
-    () =>
-      rounds.reduce(
-        (acc, r) => [acc[0] + r.scores[0], acc[1] + r.scores[1]],
-        [0, 0],
-      ),
-    [rounds],
-  )
+  useEffect(() => saveState({ settings, rounds }), [settings, rounds])
 
-  // The winner is the team that reached the target; if both crossed it in the
-  // same round, the higher total wins. An exact tie keeps the game going.
-  const winnerIndex = useMemo(() => {
-    if (!settings) return null
-    const [a, b] = totals
-    const t = settings.target
-    if (a < t && b < t) return null
-    if (a === b) return null
-    return a > b ? 0 : 1
-  }, [totals, settings])
+  const totals = useMemo(() => computeTotals(rounds), [rounds])
+  const winnerIndex = settings ? computeWinner(totals, settings.target) : null
+  const gameOver = winnerIndex !== null
+  const editingNumber = editingId ? rounds.findIndex((r) => r.id === editingId) + 1 || null : null
 
   // Re-show the celebration whenever the winning state changes.
-  useEffect(() => {
-    setDismissedWin(false)
-  }, [winnerIndex])
+  useEffect(() => setDismissedWin(false), [winnerIndex])
 
-  const startGame = (newSettings) => {
-    setSettings(newSettings)
+  const showToast = useCallback((next) => {
+    clearTimeout(toastTimer.current)
+    setToast(next)
+    toastTimer.current = setTimeout(() => setToast(null), next.duration ?? 4000)
+  }, [])
+
+  const resetEntry = () => {
+    setEntries(EMPTY_ENTRIES)
+    setEditingId(null)
+  }
+
+  const updateEntry = useCallback(
+    (fn) => {
+      haptic()
+      setEntries((prev) => prev.map((v, i) => (i === selected ? fn(v) : v)))
+    },
+    [selected],
+  )
+
+  const pressDigit = useCallback(
+    (d) =>
+      updateEntry((v) => {
+        if (v.length >= MAX_ENTRY_DIGITS) return v
+        return v === '0' || v === '' ? (d === '0' ? '' : d) : v + d
+      }),
+    [updateEntry],
+  )
+  const pressBackspace = useCallback(() => updateEntry((v) => v.slice(0, -1)), [updateEntry])
+  const pressClear = useCallback(() => updateEntry(() => ''), [updateEntry])
+  const pressQuick = (n) =>
+    updateEntry((v) => String(Math.min(10 ** MAX_ENTRY_DIGITS - 1, entryToNumber(v) + n)))
+
+  const submit = useCallback(() => {
+    const scores = entries.map(entryToNumber)
+    if (scores[0] === 0 && scores[1] === 0) {
+      setShake(true)
+      setTimeout(() => setShake(false), 500)
+      haptic(30)
+      return
+    }
+    haptic(15)
+    if (editingId) {
+      setRounds((prev) => prev.map((r) => (r.id === editingId ? { ...r, scores } : r)))
+      showToast({ message: 'تم حفظ التعديل' })
+    } else {
+      setRounds((prev) => [...prev, { id: newId(), scores }])
+    }
+    resetEntry()
+  }, [entries, editingId, showToast])
+
+  const startEdit = (round) => {
+    setEditingId(round.id)
+    setEntries(round.scores.map((s) => (s > 0 ? String(s) : '')))
+    setSelected(round.scores[0] > 0 || round.scores[1] === 0 ? 0 : 1)
+  }
+
+  const deleteRound = (round) => {
+    const index = rounds.findIndex((r) => r.id === round.id)
+    setRounds((prev) => prev.filter((r) => r.id !== round.id))
+    if (editingId === round.id) resetEntry()
+    showToast({
+      message: `حُذفت الجولة ${index + 1}`,
+      action: {
+        label: 'تراجع',
+        run: () =>
+          setRounds((prev) => {
+            const next = [...prev]
+            next.splice(index, 0, round)
+            return next
+          }),
+      },
+    })
+  }
+
+  const restart = () => {
     setRounds([])
-    setEditingSetup(false)
+    resetEntry()
   }
 
-  // Apply new names/target but keep the rounds already played.
-  const continueGame = (newSettings) => {
-    setSettings(newSettings)
-    setEditingSetup(false)
-  }
+  const keypadDisabled = gameOver && !editingId
+  const setupOpen = !settings || editingSetup
+  const modalOpen = gameOver && !dismissedWin
 
-  const addRound = (scores) => {
-    setRounds((prev) => [...prev, { id: newId(), scores }])
-  }
+  // Physical keyboard support (desktop / tablets with keyboards).
+  useEffect(() => {
+    if (setupOpen || modalOpen) return
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'Escape' && editingId) return resetEntry()
+      if (keypadDisabled) return
+      if (/^[0-9]$/.test(e.key)) pressDigit(e.key)
+      else if (e.key === 'Backspace') pressBackspace()
+      else if (e.key === 'Enter') submit()
+      else if (e.key === 'Tab') {
+        e.preventDefault()
+        setSelected((s) => 1 - s)
+      } else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [setupOpen, modalOpen, keypadDisabled, editingId, pressDigit, pressBackspace, submit])
 
-  const updateRound = (id, scores) => {
-    setRounds((prev) => prev.map((r) => (r.id === id ? { ...r, scores } : r)))
-  }
-
-  const deleteRound = (id) => {
-    setRounds((prev) => prev.filter((r) => r.id !== id))
-  }
-
-  const restart = () => setRounds([])
-
-  const backToSetup = () => setEditingSetup(true)
-
-  if (!settings || editingSetup) {
+  if (setupOpen) {
     return (
       <SetupScreen
         initial={settings}
-        onStart={startGame}
-        onContinue={settings && rounds.length > 0 ? continueGame : null}
+        onStart={(s) => {
+          setSettings(s)
+          restart()
+          setEditingSetup(false)
+        }}
+        onContinue={
+          settings && rounds.length > 0
+            ? (s) => {
+                setSettings(s)
+                setEditingSetup(false)
+              }
+            : null
+        }
         onCancel={settings ? () => setEditingSetup(false) : null}
       />
     )
   }
 
-  const gameOver = winnerIndex !== null
-
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-4 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <header className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <img src="/domino.svg" alt="" className="h-8 w-8" />
-          <h1 className="text-xl font-extrabold">حاسبة الدومينو</h1>
+    <div className="mx-auto flex h-dvh w-full max-w-md flex-col gap-3 px-3 short:gap-2 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <header className="flex items-center justify-between gap-2 px-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <img src="/domino.svg" alt="" className="h-7 w-7 -rotate-12" />
+          <h1 className="truncate text-lg font-extrabold max-[359px]:hidden">حاسبة الدومينو</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
-            الهدف: {settings.target}
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-slate-300">
+            الهدف <span className="text-teal-300 tabular-nums">{settings.target}</span>
           </span>
-          <button
-            type="button"
-            onClick={backToSetup}
-            className="rounded-full bg-slate-800 p-2 text-slate-300 transition hover:bg-slate-700 active:scale-95"
-            aria-label="الإعدادات"
-            title="الإعدادات"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+          <HeaderButton
+            label="لعبة جديدة"
+            icon="reset"
+            disabled={rounds.length === 0}
+            onClick={() => {
+              if (confirm('بدء لعبة جديدة ومسح جميع الجولات؟')) restart()
+            }}
+          />
+          <HeaderButton label="الإعدادات" icon="settings" onClick={() => setEditingSetup(true)} />
         </div>
       </header>
 
-      <Scoreboard teams={settings.teams} totals={totals} target={settings.target} winnerIndex={winnerIndex} />
+      <ScoreCards
+        teams={settings.teams}
+        totals={totals}
+        target={settings.target}
+        winnerIndex={winnerIndex}
+        selected={selected}
+        onSelect={(i) => !keypadDisabled && setSelected(i)}
+      />
 
-      <RoundInput teams={settings.teams} onAdd={addRound} disabled={gameOver} />
+      <RoundHistory
+        teams={settings.teams}
+        rounds={rounds}
+        editingId={editingId}
+        onEdit={startEdit}
+        onDelete={deleteRound}
+      />
 
-      {gameOver && dismissedWin && (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm">
-          <span className="font-semibold text-amber-200">
-            🏆 فاز {settings.teams[winnerIndex]}
-          </span>
+      {gameOver && dismissedWin && !editingId && (
+        <div className="glass flex items-center justify-between gap-3 rounded-2xl px-3 py-2 text-sm">
+          <span className="truncate font-bold text-amber-200">🏆 فاز {settings.teams[winnerIndex]}</span>
           <button
             type="button"
             onClick={restart}
-            className="rounded-xl bg-amber-400 px-3 py-1.5 font-bold text-slate-900 active:scale-95"
+            className="shrink-0 rounded-xl bg-amber-400 px-3 py-1.5 font-extrabold text-slate-900 active:scale-95"
           >
             لعبة جديدة
           </button>
         </div>
       )}
 
-      <RoundsTable teams={settings.teams} rounds={rounds} onUpdate={updateRound} onDelete={deleteRound} />
+      <Keypad
+        teams={settings.teams}
+        selected={selected}
+        onSelect={setSelected}
+        entries={entries}
+        onDigit={pressDigit}
+        onBackspace={pressBackspace}
+        onClear={pressClear}
+        onQuick={pressQuick}
+        onSubmit={submit}
+        editingNumber={editingNumber}
+        onCancelEdit={resetEntry}
+        disabled={keypadDisabled}
+        shake={shake}
+      />
 
-      {rounds.length > 0 && (
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm('هل تريد مسح جميع الجولات وبدء لعبة جديدة؟')) restart()
-          }}
-          className="mx-auto mt-2 text-sm font-semibold text-slate-400 underline-offset-4 hover:text-rose-300 hover:underline"
-        >
-          إعادة تعيين اللعبة
-        </button>
-      )}
+      {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
 
-      {gameOver && !dismissedWin && (
+      {modalOpen && (
         <WinnerModal
           winner={settings.teams[winnerIndex]}
           loser={settings.teams[1 - winnerIndex]}
           winnerScore={totals[winnerIndex]}
           loserScore={totals[1 - winnerIndex]}
+          roundsCount={rounds.length}
           onNewGame={restart}
-          onChangeSettings={backToSetup}
+          onChangeSettings={() => setEditingSetup(true)}
           onClose={() => setDismissedWin(true)}
         />
       )}
     </div>
+  )
+}
+
+function HeaderButton({ label, icon, onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 active:scale-90 disabled:opacity-30"
+    >
+      <Icon name={icon} className="h-4.5 w-4.5" />
+    </button>
   )
 }

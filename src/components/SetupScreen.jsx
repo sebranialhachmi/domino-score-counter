@@ -1,134 +1,128 @@
 import { useState } from 'react'
+import Icon from './Icon.jsx'
+import { TEAM_STYLES } from './teamStyles.js'
 
-const PRESETS = [100, 150, 200, 500]
+const PRESETS = [100, 150, 200, 250, 500]
+const STEP = 25
+const MIN_TARGET = 25
+const MAX_TARGET = 2000
 
 export default function SetupScreen({ initial, onStart, onContinue, onCancel }) {
-  const [teamA, setTeamA] = useState(initial?.teams?.[0] ?? '')
-  const [teamB, setTeamB] = useState(initial?.teams?.[1] ?? '')
-  const [target, setTarget] = useState(String(initial?.target ?? 100))
-
-  const targetNum = Number(target)
-  const targetValid = Number.isInteger(targetNum) && targetNum > 0
+  const [names, setNames] = useState([initial?.teams?.[0] ?? '', initial?.teams?.[1] ?? ''])
+  const [target, setTarget] = useState(initial?.target ?? 200)
 
   const build = () => ({
-    teams: [teamA.trim() || 'الفريق الأول', teamB.trim() || 'الفريق الثاني'],
-    target: targetNum,
+    teams: [names[0].trim() || 'الفريق الأول', names[1].trim() || 'الفريق الثاني'],
+    target,
   })
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (targetValid) onStart(build())
-  }
+  const step = (delta) => setTarget((t) => Math.min(MAX_TARGET, Math.max(MIN_TARGET, t + delta)))
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-4 py-8">
-      <div className="mb-8 text-center">
-        <img src="/domino.svg" alt="" className="mx-auto mb-3 h-16 w-16 rotate-12" />
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-6 px-4 py-[max(1.5rem,env(safe-area-inset-top))]">
+      <div className="text-center">
+        <div className="glass mx-auto mb-4 grid h-20 w-20 place-items-center rounded-3xl">
+          <img src="/domino.svg" alt="" className="h-12 w-12 -rotate-12" />
+        </div>
         <h1 className="text-3xl font-black">حاسبة نقاط الدومينو</h1>
-        <p className="mt-2 text-slate-400">أدخل أسماء الفريقين وحدد نقاط الفوز</p>
+        <p className="mt-1.5 text-sm text-slate-400">سمِّ الفريقين وحدد نقاط الفوز ثم ابدأ</p>
       </div>
 
       <form
-        onSubmit={handleSubmit}
-        className="space-y-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-2xl shadow-black/40"
+        onSubmit={(e) => {
+          e.preventDefault()
+          onStart(build())
+        }}
+        className="glass space-y-6 rounded-3xl p-5"
       >
-        <div className="space-y-4">
-          <TeamField
-            label="الفريق الأول"
-            color="bg-sky-500"
-            value={teamA}
-            onChange={setTeamA}
-            placeholder="مثال: أحمد ومحمد"
-          />
-          <TeamField
-            label="الفريق الثاني"
-            color="bg-rose-500"
-            value={teamB}
-            onChange={setTeamB}
-            placeholder="مثال: علي وخالد"
-          />
+        <div className="space-y-3">
+          {[0, 1].map((i) => (
+            <label key={i} className="block">
+              <span className="mb-1.5 flex items-center gap-2 text-xs font-bold text-slate-400">
+                <span className={`h-2 w-2 rounded-full ${TEAM_STYLES[i].dot}`} />
+                {i === 0 ? 'الفريق الأول' : 'الفريق الثاني'}
+              </span>
+              <input
+                type="text"
+                value={names[i]}
+                maxLength={24}
+                enterKeyHint="next"
+                onChange={(e) => setNames((n) => n.map((v, j) => (j === i ? e.target.value : v)))}
+                placeholder={i === 0 ? 'مثال: أحمد ومحمد' : 'مثال: علي وخالد'}
+                className={`w-full rounded-2xl border border-white/10 bg-white/4 px-4 py-3.5 text-lg font-semibold outline-none placeholder:text-slate-600 focus:ring-2 ${TEAM_STYLES[i].ring}`}
+              />
+            </label>
+          ))}
         </div>
 
         <div>
-          <span className="mb-2 block text-sm font-bold text-slate-300">حد النقاط للفوز</span>
-          <div className="grid grid-cols-4 gap-2">
+          <span className="mb-2 block text-xs font-bold text-slate-400">نقاط الفوز</span>
+          <div className="grid grid-cols-5 gap-1.5">
             {PRESETS.map((p) => (
               <button
                 key={p}
                 type="button"
-                onClick={() => setTarget(String(p))}
-                className={`rounded-xl py-3 text-lg font-extrabold transition active:scale-95 ${
-                  targetNum === p
-                    ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/30'
-                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                onClick={() => setTarget(p)}
+                aria-pressed={target === p}
+                className={`rounded-xl py-2.5 text-base font-extrabold tabular-nums transition active:scale-95 ${
+                  target === p
+                    ? 'bg-teal-400 text-slate-950 shadow-lg shadow-teal-500/30'
+                    : 'bg-white/5 text-slate-300 hover:bg-white/10'
                 }`}
               >
                 {p}
               </button>
             ))}
           </div>
-          <label className="mt-3 flex items-center gap-3 text-sm text-slate-400">
-            <span className="shrink-0">أو رقم مخصص:</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="1"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-center text-lg font-bold text-slate-100 outline-none focus:border-emerald-400"
-            />
-          </label>
-          {!targetValid && <p className="mt-2 text-sm text-rose-400">أدخل رقماً صحيحاً أكبر من صفر</p>}
+
+          {/* Custom target without the system keyboard */}
+          <div className="mt-3 flex items-center gap-2 rounded-2xl bg-white/4 p-1.5">
+            <StepButton label="زيادة" icon="plus" onClick={() => step(STEP)} disabled={target >= MAX_TARGET} />
+            <div className="flex-1 text-center">
+              <div className="text-3xl font-black text-white tabular-nums">{target}</div>
+              <div className="text-[11px] text-slate-500">رقم مخصص (±{STEP})</div>
+            </div>
+            <StepButton label="إنقاص" icon="minus" onClick={() => step(-STEP)} disabled={target <= MIN_TARGET} />
+          </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={!targetValid}
-          className="w-full rounded-2xl bg-emerald-500 py-4 text-xl font-black text-slate-950 shadow-lg shadow-emerald-500/30 transition active:scale-[0.98] disabled:opacity-40"
-        >
-          {onContinue ? 'بدء لعبة جديدة' : 'ابدأ اللعب'}
-        </button>
-
-        {onContinue && (
+        <div className="space-y-2">
           <button
-            type="button"
-            disabled={!targetValid}
-            onClick={() => onContinue(build())}
-            className="w-full rounded-2xl bg-slate-800 py-3 font-bold text-slate-100 transition hover:bg-slate-700 active:scale-[0.98] disabled:opacity-40"
+            type="submit"
+            className="w-full rounded-2xl bg-gradient-to-l from-teal-400 to-emerald-400 py-4 text-xl font-black text-slate-950 shadow-lg shadow-teal-500/25 transition active:scale-[0.98]"
           >
-            حفظ ومتابعة اللعبة الحالية
+            {onContinue ? 'بدء لعبة جديدة' : 'ابدأ اللعب'}
           </button>
-        )}
-
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="w-full py-2 text-sm font-semibold text-slate-400 hover:text-slate-200"
-          >
-            رجوع بدون تغيير
-          </button>
-        )}
+          {onContinue && (
+            <button
+              type="button"
+              onClick={() => onContinue(build())}
+              className="w-full rounded-2xl border border-white/10 bg-white/5 py-3 font-bold text-slate-100 transition hover:bg-white/10 active:scale-[0.98]"
+            >
+              حفظ ومتابعة اللعبة الحالية
+            </button>
+          )}
+          {onCancel && (
+            <button type="button" onClick={onCancel} className="w-full py-2 text-sm font-semibold text-slate-400 hover:text-slate-200">
+              رجوع بدون تغيير
+            </button>
+          )}
+        </div>
       </form>
     </div>
   )
 }
 
-function TeamField({ label, color, value, onChange, placeholder }) {
+function StepButton({ label, icon, onClick, disabled }) {
   return (
-    <label className="block">
-      <span className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-300">
-        <span className={`h-3 w-3 rounded-full ${color}`} />
-        {label}
-      </span>
-      <input
-        type="text"
-        value={value}
-        maxLength={30}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-lg outline-none placeholder:text-slate-600 focus:border-emerald-400"
-      />
-    </label>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="grid h-12 w-12 place-items-center rounded-xl bg-white/8 text-slate-200 transition active:scale-90 disabled:opacity-30"
+    >
+      <Icon name={icon} className="h-5 w-5" strokeWidth={2.5} />
+    </button>
   )
 }
