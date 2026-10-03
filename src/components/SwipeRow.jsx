@@ -1,12 +1,16 @@
 import { useRef, useState } from 'react'
+import { usePrefs } from '../lib/prefs.jsx'
 
 const ACTIONS_WIDTH = 132
 const DRAG_THRESHOLD = 8
 
-// A row that slides sideways to reveal action buttons. In RTL the actions sit
-// on the left edge, so the row is dragged to the right to uncover them.
+// A row that slides sideways to reveal action buttons. The actions sit on the
+// row's end edge (left in RTL, right in LTR); the row is dragged toward the
+// start to uncover them.
 // A plain tap toggles the row too, so it works with a mouse as well.
 export default function SwipeRow({ open, onOpenChange, actions, children }) {
+  const { language } = usePrefs()
+  const sign = language.dir === 'rtl' ? 1 : -1
   const [dragX, setDragX] = useState(null)
   const gesture = useRef(null)
 
@@ -35,7 +39,7 @@ export default function SwipeRow({ open, onOpenChange, actions, children }) {
       }
     }
     if (g.axis === 'x') {
-      setDragX(Math.max(0, Math.min(ACTIONS_WIDTH + 28, g.base + dx)))
+      setDragX(Math.max(0, Math.min(ACTIONS_WIDTH + 28, g.base + dx * sign)))
     }
   }
 
@@ -61,7 +65,7 @@ export default function SwipeRow({ open, onOpenChange, actions, children }) {
   return (
     <div className="relative overflow-hidden rounded-2xl">
       <div
-        className="absolute inset-y-0 left-0 flex items-stretch gap-1.5 p-1.5"
+        className="absolute inset-y-0 end-0 flex items-stretch gap-1.5 p-1.5"
         style={{ width: ACTIONS_WIDTH }}
         aria-hidden={!open}
       >
@@ -73,7 +77,7 @@ export default function SwipeRow({ open, onOpenChange, actions, children }) {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         className={`relative cursor-grab touch-pan-y select-none ${dragX === null ? 'transition-transform duration-200 ease-out' : ''}`}
-        style={{ transform: `translateX(${offset}px)` }}
+        style={{ transform: `translateX(${offset * sign}px)` }}
       >
         {children}
       </div>

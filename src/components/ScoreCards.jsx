@@ -1,7 +1,9 @@
 import Icon from './Icon.jsx'
 import { TEAM_STYLES } from './teamStyles.js'
+import { usePrefs } from '../lib/prefs.jsx'
 
 export default function ScoreCards({ teams, totals, target, winnerIndex, selected, onSelect }) {
+  const { t } = usePrefs()
   const leader = totals[0] === totals[1] ? null : totals[0] > totals[1] ? 0 : 1
 
   return (
@@ -18,7 +20,7 @@ export default function ScoreCards({ teams, totals, target, winnerIndex, selecte
             type="button"
             onClick={() => onSelect(i)}
             aria-pressed={isSelected}
-            aria-label={`${name}: ${totals[i]} من ${target}`}
+            aria-label={t('card.aria', { name, score: totals[i], target })}
             className={`glass relative rounded-3xl px-3.5 pt-4 pb-3 text-start short:pt-3 short:pb-2.5 transition active:scale-[0.98] ${
               isSelected ? `ring-2 ${style.ring}` : ''
             }`}
@@ -30,7 +32,7 @@ export default function ScoreCards({ teams, totals, target, winnerIndex, selecte
             {(winnerIndex === i || (winnerIndex === null && leader === i)) && (
               <span className="absolute -top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-gradient-to-l from-amber-300 to-yellow-400 px-2.5 py-0.5 text-[11px] font-extrabold whitespace-nowrap text-slate-900 shadow-lg shadow-amber-500/30">
                 <Icon name="crown" className="h-3 w-3" strokeWidth={2.5} />
-                {winnerIndex === i ? 'الفائز' : 'متقدم'}
+                {winnerIndex === i ? t('card.winner') : t('card.leading')}
               </span>
             )}
 
@@ -41,7 +43,8 @@ export default function ScoreCards({ teams, totals, target, winnerIndex, selecte
               </h2>
             </div>
 
-            <div dir="ltr" className="relative mt-1 flex items-baseline justify-end gap-1 tabular-nums">
+            <div className="relative mt-1 text-start">
+              <span dir="ltr" className="inline-flex items-baseline gap-1">
               <span
                 key={totals[i]}
                 className={`animate-bump leading-none font-black text-white ${
@@ -50,7 +53,8 @@ export default function ScoreCards({ teams, totals, target, winnerIndex, selecte
               >
                 {totals[i]}
               </span>
-              <span className="text-base font-bold text-white/35">/{target}</span>
+              <span className="text-base font-bold text-white/35 tabular-nums">/{target}</span>
+              </span>
             </div>
 
             <div
@@ -69,7 +73,7 @@ export default function ScoreCards({ teams, totals, target, winnerIndex, selecte
             </div>
 
             <p className={`relative mt-1.5 text-xs font-semibold ${remaining > 0 ? 'text-slate-400' : style.text}`}>
-              {remaining > 0 ? `باقي ${remaining}` : 'وصل للهدف 🎯'}
+              {remaining > 0 ? t('card.remaining', { n: remaining }) : t('card.reached')}
             </p>
           </button>
         )

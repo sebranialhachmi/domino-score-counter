@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { usePrefs } from '../lib/prefs.jsx'
 
 const COLORS = ['#2dd4bf', '#fb923c', '#facc15', '#5eead4', '#fdba74', '#ffffff']
 
@@ -50,6 +51,7 @@ export default function WinnerModal({
   onChangeSettings,
   onClose,
 }) {
+  const { t } = usePrefs()
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink/75 p-4 backdrop-blur-md"
@@ -61,7 +63,7 @@ export default function WinnerModal({
       <div className="glass animate-pop-in relative w-full max-w-sm overflow-hidden rounded-[2rem] p-6 text-center">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-amber-400/25 to-transparent" />
         <div className="animate-trophy relative mb-1 text-7xl">🏆</div>
-        <p className="relative text-sm font-bold text-amber-300">مبروك الفوز!</p>
+        <p className="relative text-sm font-bold text-amber-300">{t('win.congrats')}</p>
         <h2 id="winner-title" className="relative mt-1 text-3xl font-black break-words text-white">
           {winner}
         </h2>
@@ -76,7 +78,7 @@ export default function WinnerModal({
             <div className="text-4xl font-black text-slate-400 tabular-nums">{loserScore}</div>
             <div className="truncate text-xs text-slate-500">{loser}</div>
           </div>
-          <div className="col-span-3 mt-1 text-xs text-slate-500">في {roundsCount} جولة</div>
+          <div className="col-span-3 mt-1 text-xs text-slate-500">{t('win.inRounds', { n: roundsCount })}</div>
         </div>
 
         <button
@@ -85,7 +87,7 @@ export default function WinnerModal({
           autoFocus
           className="relative w-full rounded-2xl bg-gradient-to-l from-teal-400 to-emerald-400 py-4 text-xl font-black text-slate-950 shadow-lg shadow-teal-500/30 transition active:scale-[0.98]"
         >
-          بدء لعبة جديدة
+          {t('win.newGame')}
         </button>
         <div className="relative mt-2 grid grid-cols-2 gap-2">
           <button
@@ -93,14 +95,14 @@ export default function WinnerModal({
             onClick={onChangeSettings}
             className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-slate-200 hover:bg-white/10"
           >
-            تغيير الفرق
+            {t('win.changeTeams')}
           </button>
           <button
             type="button"
             onClick={onClose}
             className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-bold text-slate-200 hover:bg-white/10"
           >
-            مراجعة الجولات
+            {t('win.review')}
           </button>
         </div>
       </div>

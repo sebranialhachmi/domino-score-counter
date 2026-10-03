@@ -1,48 +1,57 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import SetupScreen from './components/SetupScreen.jsx'
-import ScoreCards from './components/ScoreCards.jsx'
-import RoundHistory from './components/RoundHistory.jsx'
-import Keypad from './components/Keypad.jsx'
-import WinnerModal from './components/WinnerModal.jsx'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import GameScreen from './screens/GameScreen.jsx'
+import SavedGamesScreen from './screens/SavedGamesScreen.jsx'
+import GameDetailsScreen from './screens/GameDetailsScreen.jsx'
+import StatsScreen from './screens/StatsScreen.jsx'
+import SettingsScreen from './screens/SettingsScreen.jsx'
+import TabBar from './components/TabBar.jsx'
 import Toast from './components/Toast.jsx'
-import Icon from './components/Icon.jsx'
-import {
-  MAX_ENTRY_DIGITS,
-  computeTotals,
-  computeWinner,
-  entryToNumber,
-  haptic,
-  loadState,
-  newId,
-  saveState,
-} from './lib/game.js'
+import { PrefsProvider, usePrefs } from './lib/prefs.jsx'
+import { clearAllStorage, loadHistory, loadState, newId, saveHistory, saveState } from './lib/game.js'
 
-const EMPTY_ENTRIES = ['', '']
+function freshGame(settings = null) {
+  return { settings, rounds: [], gameId: newId(), startedAt: Date.now() }
+}
 
 export default function App() {
-  const saved = useMemo(loadState, [])
-  const [settings, setSettings] = useState(saved?.settings ?? null)
-  const [rounds, setRounds] = useState(saved?.rounds ?? [])
-  const [dismissedWin, setDismissedWin] = useState(false)
-  const [editingSetup, setEditingSetup] = useState(false)
+  return (
+    <PrefsProvider>
+      <Shell />
+    </PrefsProvider>
+  )
+}
 
-  // Keypad state: one pending entry per team, and which team the keys type into.
-  const [entries, setEntries] = useState(EMPTY_ENTRIES)
-  const [selected, setSelected] = useState(0)
-  const [editingId, setEditingId] = useState(null)
-  const [shake, setShake] = useState(false)
+function Shell() {
+  const { t, resetPrefs } = usePrefs()
+  const [game, setGame] = useState(() => loadState() ?? freshGame())
+  const [history, setHistory] = useState(loadHistory)
+  const [tab, setTab] = useState('game')
+  const [detailsId, setDetailsId] = useState(null)
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
 
-  useEffect(() => saveState({ settings, rounds }), [settings, rounds])
+  useEffect(() => saveState(game), [game])
+  useEffect(() => saveHistory(history), [history])
 
-  const totals = useMemo(() => computeTotals(rounds), [rounds])
-  const winnerIndex = settings ? computeWinner(totals, settings.target) : null
-  const gameOver = winnerIndex !== null
-  const editingNumber = editingId ? rounds.findIndex((r) => r.id === editingId) + 1 || null : null
-
-  // Re-show the celebration whenever the winning state changes.
-  useEffect(() => setDismissedWin(false), [winnerIndex])
+  // The current game is mirrored into the saved-games list as soon as it has a
+  // round, so it is never lost when a new game starts or the app closes.
+  useEffect(() => {
+    setHistory((prev) => {
+      const rest = prev.filter((g) => g.id !== game.gameId)
+      if (!game.settings || game.rounds.length === 0) {
+        return rest.length === prev.length ? prev : rest
+      }
+      const entry = {
+        id: game.gameId,
+        teams: game.settings.teams,
+        target: game.settings.target,
+        rounds: game.rounds,
+        startedAt: game.startedAt,
+        updatedAt: Date.now(),
+      }
+      return [entry, ...rest].sort((a, b) => b.startedAt - a.startedAt)
+    })
+  }, [game])
 
   const showToast = useCallback((next) => {
     clearTimeout(toastTimer.current)
@@ -50,223 +59,107 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), next.duration ?? 4000)
   }, [])
 
-  const resetEntry = () => {
-    setEntries(EMPTY_ENTRIES)
-    setEditingId(null)
+  const setRounds = useCallback((fn) => setGame((g) => ({ ...g, rounds: fn(g.rounds) })), [])
+  const startGame = useCallback((settings) => setGame(freshGame(settings)), [])
+  const updateSettings = useCallback((settings) => setGame((g) => ({ ...g, settings })), [])
+  const restart = useCallback(() => setGame((g) => freshGame(g.settings)), [])
+
+  const openGame = (next) => {
+    setGame(next)
+    setDetailsId(null)
+    setTab('game')
   }
 
-  const updateEntry = useCallback(
-    (fn) => {
-      haptic()
-      setEntries((prev) => prev.map((v, i) => (i === selected ? fn(v) : v)))
-    },
-    [selected],
-  )
-
-  const pressDigit = useCallback(
-    (d) =>
-      updateEntry((v) => {
-        if (v.length >= MAX_ENTRY_DIGITS) return v
-        return v === '0' || v === '' ? (d === '0' ? '' : d) : v + d
-      }),
-    [updateEntry],
-  )
-  const pressBackspace = useCallback(() => updateEntry((v) => v.slice(0, -1)), [updateEntry])
-  const pressClear = useCallback(() => updateEntry(() => ''), [updateEntry])
-  const pressQuick = (n) =>
-    updateEntry((v) => String(Math.min(10 ** MAX_ENTRY_DIGITS - 1, entryToNumber(v) + n)))
-
-  const submit = useCallback(() => {
-    const scores = entries.map(entryToNumber)
-    if (scores[0] === 0 && scores[1] === 0) {
-      setShake(true)
-      setTimeout(() => setShake(false), 500)
-      haptic(30)
-      return
-    }
-    haptic(15)
-    if (editingId) {
-      setRounds((prev) => prev.map((r) => (r.id === editingId ? { ...r, scores } : r)))
-      showToast({ message: 'تم حفظ التعديل' })
-    } else {
-      setRounds((prev) => [...prev, { id: newId(), scores }])
-    }
-    resetEntry()
-  }, [entries, editingId, showToast])
-
-  const startEdit = (round) => {
-    setEditingId(round.id)
-    setEntries(round.scores.map((s) => (s > 0 ? String(s) : '')))
-    setSelected(round.scores[0] > 0 || round.scores[1] === 0 ? 0 : 1)
+  const resumeGame = (saved) => {
+    openGame({
+      settings: { teams: saved.teams, target: saved.target },
+      rounds: saved.rounds,
+      gameId: saved.id,
+      startedAt: saved.startedAt,
+    })
+    showToast({ message: t('details.resumed') })
   }
 
-  const deleteRound = (round) => {
-    const index = rounds.findIndex((r) => r.id === round.id)
-    setRounds((prev) => prev.filter((r) => r.id !== round.id))
-    if (editingId === round.id) resetEntry()
+  const rematch = (saved) => openGame(freshGame({ teams: saved.teams, target: saved.target }))
+
+  const deleteGame = (id) => {
+    const index = history.findIndex((g) => g.id === id)
+    const removed = history[index]
+    setHistory((prev) => prev.filter((g) => g.id !== id))
+    setDetailsId(null)
     showToast({
-      message: `حُذفت الجولة ${index + 1}`,
+      message: t('details.deleted'),
       action: {
-        label: 'تراجع',
+        label: t('common.undo'),
         run: () =>
-          setRounds((prev) => {
+          setHistory((prev) => {
             const next = [...prev]
-            next.splice(index, 0, round)
+            next.splice(index, 0, removed)
             return next
           }),
       },
     })
   }
 
-  const restart = () => {
-    setRounds([])
-    resetEntry()
+  const clearHistory = () => {
+    setHistory((prev) => prev.filter((g) => g.id === game.gameId))
+    showToast({ message: t('settings.historyCleared') })
   }
 
-  const keypadDisabled = gameOver && !editingId
-  const setupOpen = !settings || editingSetup
-  const modalOpen = gameOver && !dismissedWin
-
-  // Physical keyboard support (desktop / tablets with keyboards).
-  useEffect(() => {
-    if (setupOpen || modalOpen) return
-    const onKey = (e) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Escape' && editingId) return resetEntry()
-      if (keypadDisabled) return
-      if (/^[0-9]$/.test(e.key)) pressDigit(e.key)
-      else if (e.key === 'Backspace') pressBackspace()
-      else if (e.key === 'Enter') submit()
-      else if (e.key === 'Tab') {
-        e.preventDefault()
-        setSelected((s) => 1 - s)
-      } else return
-      e.preventDefault()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [setupOpen, modalOpen, keypadDisabled, editingId, pressDigit, pressBackspace, submit])
-
-  if (setupOpen) {
-    return (
-      <SetupScreen
-        initial={settings}
-        onStart={(s) => {
-          setSettings(s)
-          restart()
-          setEditingSetup(false)
-        }}
-        onContinue={
-          settings && rounds.length > 0
-            ? (s) => {
-                setSettings(s)
-                setEditingSetup(false)
-              }
-            : null
-        }
-        onCancel={settings ? () => setEditingSetup(false) : null}
-      />
-    )
+  const resetAll = () => {
+    clearAllStorage()
+    resetPrefs()
+    setHistory([])
+    setGame(freshGame())
+    setDetailsId(null)
+    setTab('game')
   }
+
+  const changeTab = (next) => {
+    setTab(next)
+    if (next !== 'saved') setDetailsId(null)
+  }
+
+  const detailsGame = detailsId ? history.find((g) => g.id === detailsId) : null
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col gap-3 px-3 short:gap-2 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      <header className="flex items-center justify-between gap-2 px-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <img src="/domino.svg" alt="" className="h-7 w-7 -rotate-12" />
-          <h1 className="truncate text-lg font-extrabold max-[359px]:hidden">حاسبة الدومينو</h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-slate-300">
-            الهدف <span className="text-teal-300 tabular-nums">{settings.target}</span>
-          </span>
-          <HeaderButton
-            label="لعبة جديدة"
-            icon="reset"
-            disabled={rounds.length === 0}
-            onClick={() => {
-              if (confirm('بدء لعبة جديدة ومسح جميع الجولات؟')) restart()
-            }}
+    <div className="mx-auto flex h-dvh w-full max-w-md flex-col">
+      <main className="relative min-h-0 flex-1 overflow-hidden">
+        {/* The game stays mounted so a half-typed entry survives tab switches. */}
+        <div className={tab === 'game' ? 'h-full' : 'hidden'}>
+          <GameScreen
+            active={tab === 'game'}
+            game={game}
+            setRounds={setRounds}
+            startGame={startGame}
+            updateSettings={updateSettings}
+            restart={restart}
+            showToast={showToast}
           />
-          <HeaderButton label="الإعدادات" icon="settings" onClick={() => setEditingSetup(true)} />
         </div>
-      </header>
 
-      <ScoreCards
-        teams={settings.teams}
-        totals={totals}
-        target={settings.target}
-        winnerIndex={winnerIndex}
-        selected={selected}
-        onSelect={(i) => !keypadDisabled && setSelected(i)}
-      />
+        {tab === 'saved' &&
+          (detailsGame ? (
+            <GameDetailsScreen
+              game={detailsGame}
+              isCurrent={detailsGame.id === game.gameId}
+              onBack={() => setDetailsId(null)}
+              onResume={() => (detailsGame.id === game.gameId ? setTab('game') : resumeGame(detailsGame))}
+              onRematch={() => rematch(detailsGame)}
+              onDelete={() => deleteGame(detailsGame.id)}
+            />
+          ) : (
+            <SavedGamesScreen games={history} currentId={game.gameId} onOpen={setDetailsId} />
+          ))}
 
-      <RoundHistory
-        teams={settings.teams}
-        rounds={rounds}
-        editingId={editingId}
-        onEdit={startEdit}
-        onDelete={deleteRound}
-      />
+        {tab === 'stats' && <StatsScreen games={history} />}
 
-      {gameOver && dismissedWin && !editingId && (
-        <div className="glass flex items-center justify-between gap-3 rounded-2xl px-3 py-2 text-sm">
-          <span className="truncate font-bold text-amber-200">🏆 فاز {settings.teams[winnerIndex]}</span>
-          <button
-            type="button"
-            onClick={restart}
-            className="shrink-0 rounded-xl bg-amber-400 px-3 py-1.5 font-extrabold text-slate-900 active:scale-95"
-          >
-            لعبة جديدة
-          </button>
-        </div>
-      )}
+        {tab === 'settings' && <SettingsScreen onClearHistory={clearHistory} onResetAll={resetAll} />}
+      </main>
 
-      <Keypad
-        teams={settings.teams}
-        selected={selected}
-        onSelect={setSelected}
-        entries={entries}
-        onDigit={pressDigit}
-        onBackspace={pressBackspace}
-        onClear={pressClear}
-        onQuick={pressQuick}
-        onSubmit={submit}
-        editingNumber={editingNumber}
-        onCancelEdit={resetEntry}
-        disabled={keypadDisabled}
-        shake={shake}
-      />
+      <TabBar tab={tab} onChange={changeTab} />
 
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
-
-      {modalOpen && (
-        <WinnerModal
-          winner={settings.teams[winnerIndex]}
-          loser={settings.teams[1 - winnerIndex]}
-          winnerScore={totals[winnerIndex]}
-          loserScore={totals[1 - winnerIndex]}
-          roundsCount={rounds.length}
-          onNewGame={restart}
-          onChangeSettings={() => setEditingSetup(true)}
-          onClose={() => setDismissedWin(true)}
-        />
-      )}
     </div>
-  )
-}
-
-function HeaderButton({ label, icon, onClick, disabled }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 active:scale-90 disabled:opacity-30"
-    >
-      <Icon name={icon} className="h-4.5 w-4.5" />
-    </button>
   )
 }

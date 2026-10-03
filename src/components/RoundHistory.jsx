@@ -2,8 +2,10 @@ import { useState } from 'react'
 import Icon from './Icon.jsx'
 import SwipeRow from './SwipeRow.jsx'
 import { TEAM_STYLES } from './teamStyles.js'
+import { usePrefs } from '../lib/prefs.jsx'
 
 export default function RoundHistory({ teams, rounds, editingId, onEdit, onDelete }) {
+  const { t } = usePrefs()
   const [openId, setOpenId] = useState(null)
 
   // Running totals after each round, so each row shows how the score evolved.
@@ -14,20 +16,20 @@ export default function RoundHistory({ teams, rounds, editingId, onEdit, onDelet
   })
 
   return (
-    <section className="glass flex min-h-28 flex-1 flex-col short:min-h-24 overflow-hidden rounded-3xl">
+    <section className="glass flex min-h-28 flex-1 flex-col short:min-h-20 overflow-hidden rounded-3xl">
       <div className="flex items-center justify-between px-4 pt-3 pb-2">
-        <h3 className="text-sm font-bold text-slate-200">
-          سجل الجولات
+        <h3 className="shrink-0 text-sm font-bold whitespace-nowrap text-slate-200">
+          {t('history.title')}
           {rounds.length > 0 && <span className="ms-1.5 text-slate-500">({rounds.length})</span>}
         </h3>
-        {rounds.length > 0 && <span className="text-[11px] text-slate-500">اسحب الجولة أو المسها للتعديل والحذف</span>}
+        {rounds.length > 0 && <span className="truncate ps-2 text-[11px] text-slate-500 max-[379px]:hidden">{t('history.hint')}</span>}
       </div>
 
       {rounds.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-1 px-4 pb-4 text-center">
           <span className="text-3xl opacity-70 short:hidden">🁫</span>
-          <p className="text-sm text-slate-400">لا توجد جولات بعد</p>
-          <p className="text-xs text-slate-500 short:hidden">اختر الفريق وأدخل النقاط من اللوحة بالأسفل</p>
+          <p className="text-sm text-slate-400">{t('history.empty')}</p>
+          <p className="text-xs text-slate-500 short:hidden">{t('history.emptyHint')}</p>
         </div>
       ) : (
         <ol className="no-scrollbar flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-2 pb-2">
@@ -39,7 +41,7 @@ export default function RoundHistory({ teams, rounds, editingId, onEdit, onDelet
                 actions={
                   <>
                     <ActionButton
-                      label="تعديل"
+                      label={t('common.edit')}
                       icon="edit"
                       className="bg-sky-500/90 text-white"
                       onClick={() => {
@@ -48,7 +50,7 @@ export default function RoundHistory({ teams, rounds, editingId, onEdit, onDelet
                       }}
                     />
                     <ActionButton
-                      label="حذف"
+                      label={t('common.delete')}
                       icon="trash"
                       className="bg-rose-500/90 text-white"
                       onClick={() => {

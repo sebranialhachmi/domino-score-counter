@@ -1,0 +1,13 @@
+{
+  "name": "Domino Apunte free",
+  "short_name": "Domino Apunte",
+  "description": "حاسبة دومينو مجانية — Free domino score counter",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060a13",
+  "theme_color": "#060a13",
+  "icons": [{ "src": "/domino.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
