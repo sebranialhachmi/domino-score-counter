@@ -5,7 +5,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireStaff } from "@/lib/staff-middleware";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
@@ -56,7 +56,7 @@ async function saveDraft(sb: any, userId: string, args: {
 
 // ============ SEO GENERATORS ============
 export const aiGenerateSeoMeta = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((i: unknown) => z.object({
     topic: z.string().min(2).max(400),
     locale: z.enum(["en", "ar"]).default("en"),
@@ -78,7 +78,7 @@ export const aiGenerateSeoMeta = createServerFn({ method: "POST" })
   });
 
 export const aiGenerateSchemaSuggestions = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((i: unknown) => z.object({
     entity_type: z.enum(["service", "route", "city", "airport", "faq", "article", "organization"]),
     payload: z.record(z.string(), z.unknown()),
@@ -93,7 +93,7 @@ export const aiGenerateSchemaSuggestions = createServerFn({ method: "POST" })
 
 // ============ CONTENT GENERATORS ============
 export const aiGenerateBlogDraft = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((i: unknown) => z.object({
     title: z.string().min(3).max(200),
     outline: z.array(z.string()).max(15).optional(),
@@ -112,7 +112,7 @@ Content must be 800–1400 words, well structured with H2/H3, no fabricated data
   });
 
 export const aiRewriteContent = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((i: unknown) => z.object({
     text: z.string().min(5).max(8000),
     mode: z.enum(["rewrite", "expand", "summarize", "translate"]),
@@ -139,7 +139,7 @@ export const aiRewriteContent = createServerFn({ method: "POST" })
 
 // ============ BOOKING ASSIST ============
 export const aiBookingSummary = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((i: unknown) => z.object({ booking_id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -156,7 +156,7 @@ export const aiBookingSummary = createServerFn({ method: "POST" })
   });
 
 export const aiPriceExplanation = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((i: unknown) => z.object({
     base_fare: z.number(),
     distance_km: z.number().optional(),
@@ -175,7 +175,7 @@ export const aiPriceExplanation = createServerFn({ method: "POST" })
 
 // ============ DRAFT MANAGEMENT ============
 export const listAiDrafts = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((i: unknown) => z.object({
     kind: z.string().optional(),
     status: z.enum(["draft", "approved", "rejected", "applied"]).optional(),
@@ -191,7 +191,7 @@ export const listAiDrafts = createServerFn({ method: "POST" })
   });
 
 export const reviewAiDraft = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((i: unknown) => z.object({
     draft_id: z.string().uuid(),
     decision: z.enum(["approve", "reject"]),

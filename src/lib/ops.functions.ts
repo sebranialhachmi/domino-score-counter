@@ -14,6 +14,14 @@ async function assertAdmin(ctx: { supabase: any; userId: string }) {
   return true;
 }
 
+// Restore writes with the service-role client (bypasses RLS), so it is
+// restricted to the admin role only — managers may export but not restore.
+async function assertStrictAdmin(ctx: { supabase: any; userId: string }) {
+  const { data } = await ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
+  if (data !== true) throw new Error("Forbidden: admin role required");
+  return true;
+}
+
 // ---- Ops snapshot ---------------------------------------------------------
 type OpsHealth = { name: string; status: "ok" | "warn" | "down"; detail?: string };
 
@@ -128,13 +136,20 @@ export const exportAllData = createServerFn({ method: "POST" })
 // ---- Import / restore ----------------------------------------------------
 // Admin-only. Upserts rows from an exported bundle back into each table.
 // Uses the service-role client so RLS won't block admin restore, but still
-// authorizes the caller via assertAdmin(). Errors per-table are collected
+// authorizes the caller via assertStrictAdmin(). Errors per-table are collected
 // so a partial failure doesn't abort the whole restore.
+// The audit trail is append-only: it is exported but never restored, so a
+// backup file can't be used to rewrite or forge audit history.
+const IMPORT_SKIP_TABLES = new Set<string>(["audit_logs", "activity_events"]);
+
 export const importAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { json: string; mode?: "upsert" | "insert" }) => d)
+  .inputValidator((d: { json: string; mode?: "upsert" | "insert" }) => {
+    if (!d || typeof d.json !== "string") throw new Error("Invalid backup payload");
+    return d;
+  })
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    await assertStrictAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let parsed: any;
     try { parsed = JSON.parse(data.json); } catch { throw new Error("Invalid JSON file"); }
@@ -143,6 +158,7 @@ export const importAllData = createServerFn({ method: "POST" })
 
     const report: { table: string; inserted: number; error?: string }[] = [];
     for (const table of EXPORT_TABLES) {
+      if (IMPORT_SKIP_TABLES.has(table)) { report.push({ table, inserted: 0, error: "skipped (audit trail is not restorable)" }); continue; }
       const rows = Array.isArray(tables[table]) ? tables[table].filter((r: any) => r && !r.__error) : [];
       if (!rows.length) { report.push({ table, inserted: 0 }); continue; }
       // Chunk to avoid oversized payloads

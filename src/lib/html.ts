@@ -21,11 +21,35 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 const STRIP_WITH_CONTENT = /<(script|style|iframe|object|embed|noscript|form|svg|math)\b[\s\S]*?<\/\1\s*>/gi;
 const SELF_CLOSING_DANGEROUS = /<\/?(script|style|iframe|object|embed|noscript|form|input|button|link|meta|svg|math)\b[^>]*>/gi;
 
+const NAMED_URL_ENTITIES: Record<string, string> = {
+  colon: ":", tab: "\t", newline: "\n", sol: "/", lpar: "(", rpar: ")", amp: "&",
+};
+
+/** Decode the HTML entities a browser would decode inside an attribute value. */
+function decodeEntities(value: string) {
+  return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);?/gi, (m, ent: string) => {
+    const e = ent.toLowerCase();
+    if (e.startsWith("#x")) return String.fromCodePoint(parseInt(e.slice(2), 16) || 0xfffd);
+    if (e.startsWith("#")) return String.fromCodePoint(parseInt(e.slice(1), 10) || 0xfffd);
+    return NAMED_URL_ENTITIES[e] ?? m;
+  });
+}
+
+// Allow-list of URL schemes. Relative URLs, fragments and query-only URLs have
+// no scheme and are always allowed.
+const SAFE_SCHEMES = new Set(["http", "https", "mailto", "tel"]);
+
 function safeUrl(value: string) {
   const v = value.trim();
-  if (/^\s*(javascript|vbscript|file):/i.test(v)) return "";
-  if (/^data:/i.test(v) && !/^data:image\/(png|jpe?g|gif|webp|avif);/i.test(v)) return "";
-  return v;
+  // Normalise the way a browser would before resolving the scheme: decode
+  // entities (e.g. "javascript&#58;") and drop whitespace/control characters
+  // (e.g. "java\tscript:") that browsers ignore inside the scheme.
+  // eslint-disable-next-line no-control-regex
+  const normalised = decodeEntities(v).replace(/[\u0000-\u0020\u007f-\u009f]/g, "").toLowerCase();
+  const scheme = /^([a-z][a-z0-9+.-]*):/.exec(normalised)?.[1];
+  if (!scheme) return v;
+  if (scheme === "data") return /^data:image\/(png|jpe?g|gif|webp|avif);/.test(normalised) ? v : "";
+  return SAFE_SCHEMES.has(scheme) ? v : "";
 }
 
 function cleanAttrs(tag: string, raw: string) {

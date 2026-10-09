@@ -153,6 +153,25 @@ export const listAnnouncements = createServerFn({ method: "GET" }).handler(async
   return data ?? [];
 });
 
+// Per-IP throttle for anonymous form submissions (spam / flood protection).
+// Fails open if the limiter itself errors so a DB hiccup never blocks real customers.
+async function enforcePublicFormLimit(scope: string, limit = 3) {
+  const { getRequest } = await import("@tanstack/react-start/server");
+  const { checkRateLimit, clientKey } = await import("@/lib/rate-limit.server");
+  const request = getRequest();
+  if (!request) return;
+  let res: Awaited<ReturnType<typeof checkRateLimit>>;
+  try {
+    res = await checkRateLimit(clientKey(request, scope), limit);
+  } catch (e) {
+    console.error("[rate-limit] check failed", e);
+    return;
+  }
+  if (!res.allowed) {
+    throw new Error(`Too many requests — please try again in ${res.retryAfter}s. / طلبات كثيرة، حاول مرة أخرى بعد ${res.retryAfter} ثانية.`);
+  }
+}
+
 const contactSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(200).optional().or(z.literal("")),
@@ -165,6 +184,7 @@ const contactSchema = z.object({
 export const submitContact = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => contactSchema.parse(input))
   .handler(async ({ data }) => {
+    await enforcePublicFormLimit("contact_form");
     const sb = serverPublic();
     const { error } = await sb.from("contact_submissions").insert({
       name: data.name,
@@ -201,6 +221,7 @@ const bookingSchema = z.object({
 export const submitBookingRequest = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => bookingSchema.parse(input))
   .handler(async ({ data }) => {
+    await enforcePublicFormLimit("booking_form");
     const sb = serverPublic();
     const summary = [
       `Pickup: ${data.pickup}`,

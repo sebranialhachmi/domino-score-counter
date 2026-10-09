@@ -1,15 +1,24 @@
 // Booking & CRM operations — server functions.
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireStaff } from "@/lib/staff-middleware";
+import { z } from "zod";
 
 type BookingStatus =
   | "pending" | "confirmed" | "assigned" | "en_route"
   | "on_trip" | "picked_up" | "completed" | "cancelled" | "no_show";
 
+const BOOKING_STATUSES = [
+  "pending", "confirmed", "assigned", "en_route",
+  "on_trip", "picked_up", "completed", "cancelled", "no_show",
+] as const satisfies readonly BookingStatus[];
+
+const uuid = z.string().uuid();
+const optionalUuid = uuid.nullish();
+
 /** Duplicate an existing booking — copies everything except lifecycle timestamps + status. */
 export const duplicateBooking = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => d)
+  .middleware([requireStaff])
+  .inputValidator((d: { id: string }) => z.object({ id: uuid }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     const { data: src, error } = await supabase.from("bookings").select("*").eq("id", data.id).single();
@@ -28,8 +37,17 @@ export const duplicateBooking = createServerFn({ method: "POST" })
 
 /** Bulk status update. */
 export const bulkUpdateBookings = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { ids: string[]; patch: { status?: BookingStatus; is_priority?: boolean; tags?: string[] } }) => d)
+  .middleware([requireStaff])
+  .inputValidator((d: { ids: string[]; patch: { status?: BookingStatus; is_priority?: boolean; tags?: string[] } }) =>
+    z.object({
+      ids: z.array(uuid).max(500),
+      // .strict() rejects any column other than these three.
+      patch: z.object({
+        status: z.enum(BOOKING_STATUSES).optional(),
+        is_priority: z.boolean().optional(),
+        tags: z.array(z.string().trim().max(50)).max(30).optional(),
+      }).strict(),
+    }).parse(d))
   .handler(async ({ data, context }) => {
     if (!data.ids.length) return { updated: 0 };
     const { error } = await context.supabase.from("bookings").update(data.patch as any).in("id", data.ids);
@@ -39,8 +57,13 @@ export const bulkUpdateBookings = createServerFn({ method: "POST" })
 
 /** Cancel booking with reason + category, log to activity, set cancelled_by. */
 export const cancelBooking = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string; reason: string; category?: string | null }) => d)
+  .middleware([requireStaff])
+  .inputValidator((d: { id: string; reason: string; category?: string | null }) =>
+    z.object({
+      id: uuid,
+      reason: z.string().trim().min(1).max(1000),
+      category: z.string().trim().max(80).nullish(),
+    }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { error } = await supabase.from("bookings").update({
@@ -55,8 +78,13 @@ export const cancelBooking = createServerFn({ method: "POST" })
 
 /** Add a booking note. */
 export const addBookingNote = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { booking_id: string; body: string; pinned?: boolean }) => d)
+  .middleware([requireStaff])
+  .inputValidator((d: { booking_id: string; body: string; pinned?: boolean }) =>
+    z.object({
+      booking_id: uuid,
+      body: z.string().trim().min(1).max(5000),
+      pinned: z.boolean().optional(),
+    }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("booking_notes").insert({
       booking_id: data.booking_id,
@@ -70,12 +98,21 @@ export const addBookingNote = createServerFn({ method: "POST" })
 
 /** Log a WhatsApp send (called after the deep link opens). */
 export const logWhatsAppMessage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireStaff])
   .inputValidator((d: {
     phone: string; body: string; locale?: "en" | "ar";
     template_code?: string | null;
     booking_id?: string | null; customer_id?: string | null; contact_id?: string | null;
-  }) => d)
+  }) =>
+    z.object({
+      phone: z.string().trim().min(1).max(40),
+      body: z.string().max(10000),
+      locale: z.enum(["en", "ar"]).optional(),
+      template_code: z.string().trim().max(80).nullish(),
+      booking_id: optionalUuid,
+      customer_id: optionalUuid,
+      contact_id: optionalUuid,
+    }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("whatsapp_messages").insert({
       phone: data.phone,
@@ -93,8 +130,14 @@ export const logWhatsAppMessage = createServerFn({ method: "POST" })
 
 /** Schedule a booking reminder. */
 export const scheduleBookingReminder = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { booking_id: string; remind_at: string; note?: string | null; channel?: string }) => d)
+  .middleware([requireStaff])
+  .inputValidator((d: { booking_id: string; remind_at: string; note?: string | null; channel?: string }) =>
+    z.object({
+      booking_id: uuid,
+      remind_at: z.string().datetime({ offset: true }),
+      note: z.string().trim().max(1000).nullish(),
+      channel: z.string().trim().max(30).optional(),
+    }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("booking_reminders").insert({
       booking_id: data.booking_id,
