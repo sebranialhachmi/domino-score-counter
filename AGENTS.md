@@ -1,12 +1,5 @@
-<!-- LOVABLE:BEGIN -->
-> [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
-<!-- LOVABLE:END -->
-
+- This is the standalone copy of the Taxi Omra site. It is NOT connected to Lovable and must never point at the original Lovable project's Supabase backend.
+- Site identity (domain, brand, phone, …) comes from `VITE_SITE_*` env vars via `src/lib/site-info.ts`. Never hard-code the domain; use `SITE.url` / `absoluteUrl()`.
+- Database changes go in a new file under `supabase/migrations/`; never edit an existing migration. The full migration chain must apply cleanly to an empty Supabase project.
+- Deploy target is Cloudflare Workers (nitro `cloudflare-module` preset). See README.md.
 - Blog articles without uploaded cover media use stable topic-based local fallback photography, so listing cards and article pages never render blank image areas.

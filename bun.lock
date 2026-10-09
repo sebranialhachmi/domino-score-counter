@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "tanstack_start_ts",
+      "name": "taxiomra",
       "dependencies": {
         "@fontsource-variable/cairo": "^5.2.7",
         "@fontsource-variable/fraunces": "^5.2.9",

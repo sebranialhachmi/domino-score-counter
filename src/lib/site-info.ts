@@ -29,7 +29,8 @@ const DEFAULTS = {
   legalAr: "تاكسي العمرة",
   taglineEn: "Comfortable Airport Transfers from Jeddah Airport to Makkah.",
   taglineAr: "رحلتك تبدأ براحة... من مطار جدة إلى مكة بأمان واحترافية.",
-  url: "https://omrataxi-sa.online",
+  // Dev-only fallback; production builds require VITE_SITE_URL (see vite.config.ts).
+  url: "http://localhost:5173",
   phone: "+966551796487",
   whatsapp: "966551796487",
   email: "admin@omrataxi-sa.online",

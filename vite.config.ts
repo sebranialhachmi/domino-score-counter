@@ -7,16 +7,27 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 // Public backend URL + publishable key baked in at build time so SSR never
-// depends on runtime env bindings (which are missing on the custom domain
-// worker and caused "supabaseUrl is required." 500s on every page).
-const SUPABASE_URL =
-  process.env.SUPABASE_URL ??
-  process.env.VITE_SUPABASE_URL ??
-  "https://odlzjxalzpvtngzmcnoh.supabase.co";
+// depends on runtime env bindings (which can be missing on a custom-domain
+// worker and cause "supabaseUrl is required." 500s on every page).
+// Set them in .env locally and in the Cloudflare build settings for deploys.
+// There is deliberately no hard-coded fallback: this site must use its own
+// Supabase project, never another site's.
+const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
 const SUPABASE_PUBLISHABLE_KEY =
-  process.env.SUPABASE_PUBLISHABLE_KEY ??
-  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kbHpqeGFsenB2dG5nem1jbm9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MzkzNjcsImV4cCI6MjA5OTMxNTM2N30.5ibk9_7ckzQGKFBI2m2oyM3mp_yUcAuVYWpm3kgJwOA";
+  process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
+
+// The public origin drives canonical URLs, sitemaps, robots.txt and JSON-LD.
+// Require it for production builds so a deploy never claims another site's domain.
+if (process.argv.includes("build") && !process.env.VITE_SITE_URL) {
+  throw new Error("Missing VITE_SITE_URL (e.g. https://your-domain.com or your *.workers.dev URL).");
+}
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  const msg =
+    "Missing SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY (or VITE_ equivalents). Copy .env.example to .env and fill them in.";
+  if (process.argv.includes("build")) throw new Error(msg);
+  console.warn(`[config] ${msg}`);
+}
 
 export default defineConfig({
   tanstackStart: {

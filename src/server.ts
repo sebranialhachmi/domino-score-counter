@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { SITE } from "./lib/site-info";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -81,7 +82,8 @@ function isMalformedTemplateUrl(request: Request): boolean {
 
 // Canonical host: force apex + https so www/http duplicates collapse into one
 // indexable URL instead of competing versions in search results.
-const CANONICAL_HOST = "omrataxi-sa.online";
+// Derived from VITE_SITE_URL so a domain change is a single setting.
+const CANONICAL_HOST = SITE.domain.replace(/^www\./, "").toLowerCase();
 
 const EDGE_LEGACY_REDIRECTS: Record<string, string> = {
   "/jeddah-airport-to-makkah-taxi": "/jeddah-to-makkah-taxi",
@@ -104,6 +106,8 @@ function canonicalHostRedirect(request: Request): Response | null {
   const host = (request.headers.get("host") ?? url.host).toLowerCase();
   const bareHost = host.replace(/^www\./, "");
   if (bareHost !== CANONICAL_HOST) return null;
+  // Never force https/apex on a local dev origin.
+  if (/^(localhost|127\.)/.test(CANONICAL_HOST)) return null;
 
   const proto = (request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")).toLowerCase();
   if (host === CANONICAL_HOST && proto === "https") return null;

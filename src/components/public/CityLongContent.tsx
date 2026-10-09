@@ -1,6 +1,7 @@
 import cityPages from "@/data/city-pages.json";
 import { sanitizeHtml } from "@/lib/html";
 import { useI18n } from "@/lib/i18n";
+import { SITE } from "@/lib/site-info";
 
 type CityPagesData = Record<string, { ar?: string | null; en?: string | null }>;
 
@@ -16,7 +17,7 @@ export function CityLongContent({ page }: { page: string }) {
     <section
       className="article-content mb-16 max-w-none"
       dir={locale === "ar" ? "rtl" : "ltr"}
-      dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }}
+      dangerouslySetInnerHTML={{ __html: sanitizeHtml(html.replaceAll("{{SITE_DOMAIN}}", SITE.domain)) }}
     />
   );
 }
