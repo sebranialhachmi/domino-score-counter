@@ -9,8 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "deploy": "vite build && npx wrangler deploy"
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@fontsource-variable/cairo": "^5.2.7",

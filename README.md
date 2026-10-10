@@ -1,11 +1,11 @@
 # تاكسي العمرة — النسخة المستقلة
 
 موقع ولوحة تحكم ثنائيا اللغة (عربي/إنجليزي) لشركة نقل وتاكسي.
-هذه النسخة مستقلة عن مشروع Lovable الأصلي: لها قاعدة بيانات خاصة بها (Supabase) وتُنشر على Cloudflare.
+هذه النسخة مستقلة عن مشروع Lovable الأصلي: لها قاعدة بيانات خاصة بها (Supabase) وتُنشر على Vercel.
 
 - **الواجهة والخادم:** TanStack Start (React 19 + Vite) مع Tailwind و shadcn/ui
 - **قاعدة البيانات والدخول والملفات:** Supabase
-- **الاستضافة:** Cloudflare Workers
+- **الاستضافة:** Vercel
 
 ---
 
@@ -37,7 +37,7 @@
 
 | المتغير | من أين | ملاحظات |
 |---|---|---|
-| `VITE_SITE_URL` | دومينك | مثال `https://example.com`. إلى أن تشتري الدومين استخدم رابط `*.workers.dev` |
+| `VITE_SITE_URL` | دومينك | مثال `https://example.com`. إلى أن تشتري الدومين استخدم رابط `*.vercel.app` |
 | `SUPABASE_URL` و `VITE_SUPABASE_URL` | Supabase ← Project Settings ← API | نفس القيمة |
 | `SUPABASE_PUBLISHABLE_KEY` و `VITE_SUPABASE_PUBLISHABLE_KEY` | نفس الصفحة (anon / publishable) | مفتاح عام |
 | `SUPABASE_SERVICE_ROLE_KEY` | نفس الصفحة (service_role / secret) | **سري** — لا يوضع في الكود أبداً |
@@ -53,20 +53,26 @@ npm install
 npm run dev      # http://localhost:5173/ar
 ```
 
-## 4. النشر على Cloudflare
+## 4. النشر على Vercel
 
-**الطريقة المقترحة — ربط GitHub (نشر تلقائي عند كل تعديل):**
+البناء يكتشف Vercel تلقائياً وينتج المخرجات المناسبة له (`.vercel/output`)، فلا حاجة لأي إعداد خاص في الكود.
 
-1. Cloudflare ← **Workers & Pages** ← **Create** ← **Import a repository** واختر هذا المستودع.
-2. **Build command:** `npm run build` — **Deploy command:** `npx wrangler deploy`
-3. في **Settings ← Variables and Secrets**:
-   - أضف متغيرات البناء: `VITE_SITE_URL` وكل متغيرات `SUPABASE_*` و `VITE_SUPABASE_*` (و `VITE_SITE_*` إن أردت).
-   - أضف كأسرار وقت التشغيل (Secret): `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `CRON_SECRET`.
-4. انشر. ستحصل على رابط `https://taxiomra.<حسابك>.workers.dev`.
+1. في Vercel ← المشروع ← **Settings ← Build and Deployment**:
+   - **Framework Preset:** `Other`
+   - **Build Command:** `npm run build` — اترك **Output Directory** و **Install Command** على الافتراضي.
+   - **Node.js Version:** `22.x`
+2. في **Settings ← Environment Variables** أضف (لكل البيئات: Production و Preview):
+   - `VITE_SITE_URL` — رابط الموقع (مثل `https://taxiomra.vercel.app`)
+   - `SUPABASE_URL` و `VITE_SUPABASE_URL`
+   - `SUPABASE_PUBLISHABLE_KEY` و `VITE_SUPABASE_PUBLISHABLE_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` — **سري**: من Supabase ← Project Settings ← API Keys ← secret
+   - `CRON_SECRET` — أي نص عشوائي طويل
+   - (اختياري) `VITE_SITE_PHONE`, `VITE_SITE_WHATSAPP`, `VITE_SITE_EMAIL`, `VITE_SITE_BRAND_AR` …
+3. **Deployments ← Redeploy**، أو ادفع أي تعديل إلى GitHub فيُنشر تلقائياً.
 
-**أو من جهازك:** `npx wrangler login` ثم `npm run deploy`.
+**ربط الدومين بعد شرائه:** Vercel ← **Settings ← Domains ← Add**، ثم غيّر `VITE_SITE_URL` إلى الدومين وأعد النشر. أضف الدومين أيضاً في Supabase ← Authentication ← URL Configuration (Site URL و Redirect URLs) حتى تعمل رسائل استعادة كلمة المرور.
 
-**ربط الدومين بعد شرائه:** Worker ← **Settings ← Domains & Routes ← Add ← Custom domain**، ثم غيّر `VITE_SITE_URL` إلى الدومين الجديد وأعد النشر. أضف أيضاً الدومين في Supabase ← Authentication ← URL Configuration (Site URL و Redirect URLs) حتى تعمل رسائل استعادة كلمة المرور.
+> النشر على Cloudflare Workers ما زال ممكناً: خارج Vercel يبني المشروع لـ Cloudflare تلقائياً (`npm run build` ثم `npx wrangler deploy`).
 
 ## ملاحظات
 

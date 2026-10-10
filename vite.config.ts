@@ -9,7 +9,7 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 // Public backend URL + publishable key baked in at build time so SSR never
 // depends on runtime env bindings (which can be missing on a custom-domain
 // worker and cause "supabaseUrl is required." 500s on every page).
-// Set them in .env locally and in the Cloudflare build settings for deploys.
+// Set them in .env locally and in the Vercel project settings for deploys.
 // There is deliberately no hard-coded fallback: this site must use its own
 // Supabase project, never another site's.
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
@@ -19,7 +19,7 @@ const SUPABASE_PUBLISHABLE_KEY =
 // The public origin drives canonical URLs, sitemaps, robots.txt and JSON-LD.
 // Require it for production builds so a deploy never claims another site's domain.
 if (process.argv.includes("build") && !process.env.VITE_SITE_URL) {
-  throw new Error("Missing VITE_SITE_URL (e.g. https://your-domain.com or your *.workers.dev URL).");
+  throw new Error("Missing VITE_SITE_URL (e.g. https://your-domain.com or your *.vercel.app URL).");
 }
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
