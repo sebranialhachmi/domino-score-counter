@@ -1,0 +1,5 @@
+- This is the standalone copy of the Taxi Omra site. It is NOT connected to Lovable and must never point at the original Lovable project's Supabase backend.
+- Site identity (domain, brand, phone, …) comes from `VITE_SITE_*` env vars via `src/lib/site-info.ts`. Never hard-code the domain; use `SITE.url` / `absoluteUrl()`.
+- Database changes go in a new file under `supabase/migrations/`; never edit an existing migration. The full migration chain must apply cleanly to an empty Supabase project.
+- Deploy target is Vercel: nitro auto-detects it at build time and emits `.vercel/output` (Cloudflare `cloudflare-module` is only the fallback for other hosts). See README.md.
+- Blog articles without uploaded cover media use stable topic-based local fallback photography, so listing cards and article pages never render blank image areas.
