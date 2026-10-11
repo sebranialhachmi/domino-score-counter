@@ -98,14 +98,17 @@ export const opsSnapshot = createServerFn({ method: "GET" })
   });
 
 // ---- Backup / export ------------------------------------------------------
+// Ordered so that referenced tables come first: import walks this list and
+// upserts in order, so a row's foreign keys must already exist.
 const EXPORT_TABLES = [
-  "customers", "drivers", "vehicles", "vehicle_categories", "routes",
+  "vehicle_categories", "routes", "coupons", "corporate_accounts",
+  "vehicles", "drivers", "customers",
   "bookings", "invoices", "payments", "refunds", "expenses",
-  "corporate_accounts", "coupons", "pricing_rules", "driver_payroll",
+  "pricing_rules", "driver_payroll",
   "customer_notes", "customer_documents",
   "activity_events", "audit_logs",
   "settings", "finance_settings",
-  "cms_pages", "blog_posts", "blog_categories", "faqs",
+  "cms_pages", "blog_categories", "blog_posts", "faqs",
   "hero_slides", "homepage_sections", "promotions", "partners", "testimonials",
   "whatsapp_templates",
 ] as const;
